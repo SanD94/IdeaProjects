@@ -40,7 +40,7 @@ public class KdTree {
         nullCheck(p);
         if (!contains(p)) {
             size++;
-            root = verticalInsert(root, new RectHV(0, 0, 1, 1), p);
+            root = verticalInsert(root, null, p, Side.TOP);
         }
     }
 
@@ -62,26 +62,27 @@ public class KdTree {
 
     public Point2D nearest(Point2D p) {
         nullCheck(p);
-        return nearestSearch(root, p, null, 0);
+        return nearestSearch(root, p, null, true);
     }
 
 
-    private Point2D nearestSearch(Node x, Point2D p, Point2D nearest, double distSq) {
+    private Point2D nearestSearch(Node x, Point2D p, Point2D nearest, boolean vert) {
         if (x == null) return nearest;
-        if (nearest == null) {
-            nearest = x.p;
-            distSq = p.distanceSquaredTo(nearest);
-        }
-        if (x.rect.distanceSquaredTo(p) > distSq)
+        if (nearest == null) nearest = x.p;
+        if (x.rect.distanceSquaredTo(p) > p.distanceSquaredTo(nearest))
             return nearest;
-        if (p.distanceSquaredTo(x.p) < distSq) {
+        if (p.distanceSquaredTo(x.p) < p.distanceSquaredTo(nearest))
             nearest = x.p;
-            distSq = p.distanceSquaredTo(nearest);
+        int cmp;
+        if (vert) cmp = Point2D.X_ORDER.compare(p, x.p);
+        else cmp = Point2D.Y_ORDER.compare(p, x.p);
+        if (cmp < 0) {
+            nearest = nearestSearch(x.lb, p, nearest, !vert);
+            nearest = nearestSearch(x.rt, p, nearest, !vert);
+        } else {
+            nearest = nearestSearch(x.rt, p, nearest, !vert);
+            nearest = nearestSearch(x.lb, p, nearest, !vert);
         }
-        nearest = nearestSearch(x.lb, p, nearest, distSq);
-        distSq = p.distanceSquaredTo(nearest);
-        nearest = nearestSearch(x.rt, p, nearest, distSq);
-
         return nearest;
     }
 
@@ -132,33 +133,53 @@ public class KdTree {
     }
 
 
-    private Node verticalInsert(Node x, RectHV rect, Point2D p) {
-        if (x == null) return new Node(p, rect);
+    private enum Side {
+        LEFT,
+        RIGHT,
+        TOP,
+        BOTTOM
+    }
+
+    private Node verticalInsert(Node x, Node parent, Point2D p, Side side) {
+        if (x == null) {
+            if (parent == null)
+                return new Node(p, new RectHV(0, 0, 1, 1));
+            RectHV newRect;
+            if (side == Side.BOTTOM)
+                newRect = new RectHV(parent.rect.xmin(), parent.rect.ymin(),
+                        parent.rect.xmax(), parent.p.y());
+            else
+                newRect = new RectHV(parent.rect.xmin(), parent.p.y(),
+                        parent.rect.xmax(), parent.rect.ymax());
+
+            return new Node(p, newRect);
+        }
         int cmp = Point2D.X_ORDER.compare(p, x.p);
-        RectHV newRect;
-        if (cmp < 0) {
-            newRect = new RectHV(rect.xmin(), rect.ymin(), x.p.x(), rect.ymax());
-            x.lb = horizontalInsert(x.lb, newRect, p);
-        }
-        else if (p.compareTo(x.p) != 0) {
-            newRect = new RectHV(x.p.x(), rect.ymin(), rect.xmax(), rect.ymax());
-            x.rt = horizontalInsert(x.rt, newRect, p);
-        }
+        if (cmp < 0)
+            x.lb = horizontalInsert(x.lb, x, p, Side.LEFT);
+        else if (p.compareTo(x.p) != 0)
+            x.rt = horizontalInsert(x.rt, x, p, Side.RIGHT);
+
         return x;
     }
 
-    private Node horizontalInsert(Node x, RectHV rect, Point2D p) {
-        if (x == null) return new Node(p, rect);
+    private Node horizontalInsert(Node x, Node parent, Point2D p, Side side) {
+        if (x == null) {
+            RectHV newRect;
+            if (side == Side.LEFT)
+                newRect = new RectHV(parent.rect.xmin(),
+                        parent.rect.ymin(), parent.p.x(), parent.rect.ymax());
+            else
+                newRect = new RectHV(parent.p.x(), parent.rect.ymin(),
+                        parent.rect.xmax(), parent.rect.ymax());
+
+            return new Node(p, newRect);
+        }
         int cmp = Point2D.Y_ORDER.compare(p, x.p);
-        RectHV newRect;
-        if (cmp < 0) {
-            newRect = new RectHV(rect.xmin(), rect.ymin(), rect.xmax(), x.p.y());
-            x.lb = verticalInsert(x.lb, newRect, p);
-        }
-        else if (p.compareTo(x.p) != 0) {
-            newRect = new RectHV(rect.xmin(), x.p.y(), rect.xmax(), rect.ymax());
-            x.rt = verticalInsert(x.rt, newRect, p);
-        }
+        if (cmp < 0)
+            x.lb = verticalInsert(x.lb, x, p, Side.BOTTOM);
+        else if (p.compareTo(x.p) != 0)
+            x.rt = verticalInsert(x.rt, x, p, Side.TOP);
         return x;
     }
 
