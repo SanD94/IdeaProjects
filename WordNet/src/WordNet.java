@@ -1,5 +1,6 @@
 import edu.princeton.cs.algs4.*;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -8,8 +9,9 @@ import java.util.Map;
  */
 public class WordNet {
 
-    private Digraph digraph;
+    private SAP sap;
     private Map<String, Bag<Integer>> nouns;
+    private ArrayList<String> synsets;
     private int count;
 
     //constructor takes the name of the two input files
@@ -19,12 +21,14 @@ public class WordNet {
 
 
         In synsetFile = new In(synsets);
-        nouns = new HashMap<>();
+        this.nouns = new HashMap<>();
+        this.synsets = new ArrayList<>();
 
         while (synsetFile.hasNextLine()) {
             String line = synsetFile.readLine();
             String[] parser = line.split(",");
             int id = Integer.parseInt(parser[0]);
+            this.synsets.add(parser[1]);
             String[] currentNouns = parser[1].split(" ");
             count++;
             for (String s : currentNouns) {
@@ -37,7 +41,7 @@ public class WordNet {
         synsetFile.close();
 
         In hypernymFile = new In(hypernyms);
-        digraph = new Digraph(count);
+        Digraph digraph = new Digraph(count);
 
         while (hypernymFile.hasNextLine()) {
             String line = hypernymFile.readLine();
@@ -50,6 +54,7 @@ public class WordNet {
 
         if (!isRootedDAG(digraph))
             throw new IllegalArgumentException();
+        this.sap = new SAP(digraph);
     }
 
     private boolean isRootedDAG(Digraph digraph) {
@@ -58,18 +63,18 @@ public class WordNet {
         int count = 0;
         boolean haveCycle = false;
         for (int i = 0; i < digraph.V(); i++) {
-            if (!done[i]) haveCycle |= dfs(mark, done, i);
+            if (!done[i]) haveCycle |= dfs(mark, done, i, digraph);
             if (digraph.outdegree(i) == 0) count ++;
         }
         return !haveCycle && count == 1;
     }
 
-    private boolean dfs(boolean[] mark, boolean[] done, int cur) {
+    private boolean dfs(boolean[] mark, boolean[] done, int cur, Digraph digraph) {
         boolean res = false;
         mark[cur] = true;
         done[cur] = true;
         for (int adj : digraph.adj(cur)) {
-            if (!done[adj]) res |=  dfs(mark, done, adj);
+            if (!done[adj]) res |=  dfs(mark, done, adj, digraph);
             if (mark[adj]) return true;
         }
         mark[cur] = false;
@@ -82,23 +87,34 @@ public class WordNet {
     }
 
     // is the word a WordNet noun?
-    public boolean isNoun(String noun){
+    public boolean isNoun(String noun) {
+        nullExcept(noun);
         return nouns.containsKey(noun);
     }
 
+
     // distance between nounA and nounB
     public int distance(String nounA, String nounB) {
+        nullExcept(nounA);
+        nullExcept(nounB);
         if (!isNoun(nounA) || !isNoun(nounB))
             throw new IllegalArgumentException();
-        return 0;
+        return sap.length(nouns.get(nounA), nouns.get(nounB));
     }
 
     // a synset (second field of synsets.txt) that is the common ancestor of nounA and nounB
     // in a shortest ancestral path
     public String sap(String nounA, String nounB) {
+        nullExcept(nounA);
+        nullExcept(nounB);
         if (!isNoun(nounA) || !isNoun(nounB))
             throw new IllegalArgumentException();
-        return null;
+        return synsets.get(sap.ancestor(nouns.get(nounA), nouns.get(nounB)));
+    }
+
+    private void nullExcept(String s) {
+        if ( s == null )
+            throw new NullPointerException();
     }
 
     // do unit testing of this class
